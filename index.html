@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SafeWalk — карта безопасности Актобе</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
 <style>
@@ -14,6 +14,8 @@
     --muted:#64748b;
     --accent:#e11d48;
     --primary:#2563eb;
+    --bike:#0891b2;
+    --car:#7c3aed;
     --light:#f8b400;
     --dogs:#8b5e34;
     --construction:#f97316;
@@ -28,6 +30,7 @@
   #app{position:relative;width:100%;height:100vh;min-height:480px;}
   #map{position:absolute;inset:0;}
   button{font-family:inherit;}
+  button:focus-visible, input:focus-visible{outline:2px solid var(--primary); outline-offset:1px;}
 
   header{
     position:absolute; top:0; left:0; right:0; z-index:1000;
@@ -53,39 +56,80 @@
     white-space:nowrap;
   }
   #weatherChip .ic{font-size:16px;}
+  header .sosWrap{pointer-events:auto; margin-left:auto; position:relative; flex:none;}
   header .sos{
-    pointer-events:auto;
-    margin-left:auto;
     background:var(--accent); color:#fff; border:none; border-radius:999px;
     font-weight:800; letter-spacing:0.03em; font-size:14px;
     padding:10px 18px; box-shadow:0 4px 14px rgba(225,29,72,0.45);
-    cursor:pointer; flex:none;
+    cursor:pointer;
   }
   header .sos:active{transform:scale(0.97);}
+  #sosMenu{
+    position:absolute; top:calc(100% + 8px); right:0; z-index:1002;
+    background:var(--panel); border-radius:14px; padding:8px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.3);
+    width:250px; max-width:calc(100vw - 28px);
+    opacity:0; transform:translateY(-6px) scale(0.98); pointer-events:none;
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  #sosMenu.open{opacity:1; transform:translateY(0) scale(1); pointer-events:auto;}
+  #sosMenu .sosItem{
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    background:none; border:none; border-radius:10px; padding:10px 10px;
+    font-size:13px; color:var(--text); cursor:pointer; text-decoration:none;
+  }
+  #sosMenu .sosItem:hover{background:#f1f5f9;}
+  #sosMenu .sosItem.call{color:var(--accent); font-weight:700;}
+  #sosMenu .hint{padding:6px 10px 2px; font-size:11px; color:var(--muted);}
 
-  /* ---- Route panel ---- */
+  /* ---- Route toggle + panel ---- */
   #routeToggle{
     position:absolute; top:66px; left:14px; z-index:1000;
     background:var(--primary); color:#fff; border:none; border-radius:999px;
     padding:10px 16px; font-weight:700; font-size:13.5px;
     box-shadow:0 4px 14px rgba(37,99,235,0.4); cursor:pointer;
+    transition:transform .15s ease;
   }
+  #routeToggle:active{transform:scale(0.96);}
   #routePanel{
     position:absolute; top:66px; left:14px; z-index:1001;
-    background:var(--panel); border-radius:16px; padding:14px;
+    background:var(--panel); border-radius:18px; padding:14px;
     box-shadow:0 8px 26px rgba(0,0,0,0.28);
-    width:290px; max-width:calc(100vw - 28px);
-    display:none;
+    width:300px; max-width:calc(100vw - 28px);
+    max-height:calc(100vh - 90px); overflow-y:auto;
+    opacity:0; transform:translateY(14px); pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
   }
-  #routePanel.open{display:block;}
-  #routePanel h3{margin:0 0 10px; font-size:14px; display:flex; align-items:center; justify-content:space-between;}
-  #routePanel h3 button{background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:0 4px;}
+  #routePanel.open{opacity:1; transform:translateY(0); pointer-events:auto;}
+  #routePanel .sheetHandle{display:none;}
+  #routePanel h3{margin:0 0 10px; font-size:14.5px; display:flex; align-items:center; justify-content:space-between;}
+  #routePanel h3 button{background:none;border:none;font-size:17px;cursor:pointer;color:var(--muted);padding:2px 6px;border-radius:8px;}
+  #routePanel h3 button:hover{background:#f1f5f9;}
+
+  /* Mode switch */
+  .modeSwitch{display:flex; gap:6px; background:#f1f5f9; border-radius:12px; padding:4px; margin-bottom:10px;}
+  .modeSwitch button{
+    flex:1; border:none; background:none; border-radius:9px; padding:8px 4px;
+    font-size:18px; cursor:pointer; color:var(--muted); position:relative;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    transition:background .15s ease, color .15s ease;
+  }
+  .modeSwitch button .mlabel{font-size:9.5px; font-weight:700;}
+  .modeSwitch button.active{background:var(--panel); color:var(--text); box-shadow:0 2px 6px rgba(0,0,0,0.12);}
+
   .field{position:relative; margin-bottom:8px;}
   .field input{
-    width:100%; padding:9px 10px; border-radius:10px; border:1px solid var(--border);
+    width:100%; padding:10px 32px 10px 10px; border-radius:10px; border:1px solid var(--border);
     font-size:13.5px; color:var(--text); background:#f8fafc;
   }
   .field input:focus{outline:2px solid var(--primary); outline-offset:1px;}
+  .field .clearField{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer;
+    width:22px; height:22px; border-radius:50%; display:none; align-items:center; justify-content:center;
+  }
+  .field.hasVal .clearField{display:flex;}
+  .field .clearField:hover{background:#e2e8f0;}
   .suggest{
     position:absolute; top:100%; left:0; right:0; z-index:1002;
     background:var(--panel); border:1px solid var(--border); border-top:none;
@@ -95,16 +139,47 @@
   .suggest div{padding:8px 10px; font-size:12.5px; cursor:pointer; border-bottom:1px solid #f1f5f9;}
   .suggest div:last-child{border-bottom:none;}
   .suggest div:hover, .suggest div.hl{background:#eff6ff;}
+  .spinner{
+    width:12px;height:12px;border:2px solid #cbd5e1;border-top-color:var(--primary);
+    border-radius:50%;display:inline-block;animation:spin .6s linear infinite;
+    margin-right:6px;vertical-align:middle;
+  }
+
   .row2{display:flex; gap:8px; margin-bottom:8px;}
   .row2 button{
     flex:1; border:1px solid var(--border); background:#f8fafc; color:var(--text);
     border-radius:10px; padding:8px 6px; font-size:12px; cursor:pointer;
   }
+  .row2 button:active{background:#eef2f7;}
+
+  .favRow{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;}
+  .favChip{
+    display:flex; align-items:center; gap:5px;
+    border:1px dashed var(--border); background:#f8fafc; color:var(--muted);
+    border-radius:999px; padding:6px 10px; font-size:11.5px; cursor:pointer;
+    max-width:100%;
+  }
+  .favChip.saved{border-style:solid; color:var(--text); background:#eef2ff; border-color:#c7d2fe;}
+  .favChip .lbl{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:110px;}
+  .favChip .rm{color:var(--muted); font-size:12px; margin-left:2px;}
+  .favChip .rm:hover{color:var(--err);}
+
+  .recentWrap{margin-bottom:8px;}
+  .recentWrap .rtitle{font-size:11px; color:var(--muted); margin-bottom:5px; font-weight:600;}
+  .recentRow{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;}
+  .recentChip{
+    flex:none; border:1px solid var(--border); background:#f8fafc; color:var(--text);
+    border-radius:10px; padding:6px 9px; font-size:11px; cursor:pointer; white-space:nowrap;
+  }
+  .recentChip:hover{background:#eef2f7;}
+
   #buildRouteBtn{
     width:100%; background:var(--primary); color:#fff; border:none; border-radius:10px;
-    padding:10px; font-weight:700; font-size:13.5px; cursor:pointer; margin-top:2px;
+    padding:11px; font-weight:700; font-size:13.5px; cursor:pointer; margin-top:2px;
+    transition:transform .1s ease, background .15s ease;
   }
   #buildRouteBtn:disabled{opacity:0.6; cursor:default;}
+  #buildRouteBtn:active:not(:disabled){transform:scale(0.98);}
   #routeStatus{margin-top:10px; font-size:12.5px; line-height:1.45;}
   #routeStatus .warn{color:#b45309; font-weight:600;}
   #routeStatus .ok{color:var(--ok); font-weight:600;}
@@ -114,31 +189,25 @@
     border-radius:10px; padding:7px; font-size:12px; color:var(--muted); cursor:pointer; display:none;
   }
 
-  /* ---- Legend (bottom-right now) ---- */
-  #legend{
-    position:absolute; right:14px; bottom:14px; z-index:1000;
-    background:var(--panel); border-radius:14px; padding:12px 14px;
-    box-shadow:0 6px 20px rgba(0,0,0,0.2);
-    max-width:200px; font-size:12px; color:var(--text);
-  }
-  #legend h4{margin:0 0 8px; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);}
-  #legend .row{display:flex; align-items:center; gap:8px; margin-bottom:5px;}
-  #legend .row:last-child{margin-bottom:0;}
-  #legend .sw{width:11px;height:11px;border-radius:50%;flex:none;}
-
-  #filters{
+  /* ---- Categories (filter + legend merged) ---- */
+  #categoryPanel{
     position:absolute; right:14px; top:70px; z-index:1000;
-    background:var(--panel); border-radius:14px; padding:10px;
+    background:var(--panel); border-radius:16px; padding:10px;
     box-shadow:0 6px 20px rgba(0,0,0,0.2);
-    display:flex; flex-direction:column; gap:6px; max-width:170px;
+    display:flex; flex-direction:column; gap:4px; max-width:200px;
   }
-  #filters button{
-    border:1px solid var(--border); background:#f8fafc; color:var(--text);
-    border-radius:10px; padding:7px 9px; font-size:12.5px; text-align:left;
+  #categoryPanel h4{margin:2px 6px 4px; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);}
+  #categoryPanel button{
+    border:1px solid transparent; background:none; color:var(--text);
+    border-radius:10px; padding:7px 8px; font-size:12.5px; text-align:left;
     cursor:pointer; display:flex; align-items:center; gap:8px;
   }
-  #filters button.active{background:var(--text); color:#fff; border-color:var(--text);}
-  #filters button .sw{width:10px;height:10px;border-radius:50%;flex:none;}
+  #categoryPanel button:hover{background:#f8fafc;}
+  #categoryPanel button.active{background:var(--text); color:#fff;}
+  #categoryPanel button.active .sw{box-shadow:0 0 0 2px rgba(255,255,255,0.5);}
+  #categoryPanel button .sw{width:10px;height:10px;border-radius:50%;flex:none;}
+  #categoryPanel button .cnt{margin-left:auto; font-size:10.5px; color:var(--muted);}
+  #categoryPanel button.active .cnt{color:rgba(255,255,255,0.75);}
 
   /* ---- Compass + geolocation (bottom-left) ---- */
   #compassWrap{
@@ -180,6 +249,15 @@
     border-radius:8px; max-width:150px; text-align:center; display:none;
   }
 
+  #toast{
+    position:absolute; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+    background:rgba(15,23,42,0.92); color:#fff; padding:10px 16px; border-radius:12px;
+    font-size:12.5px; z-index:2000; box-shadow:0 8px 20px rgba(0,0,0,0.3);
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+    max-width:calc(100vw - 40px); text-align:center;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
   .lp{font-size:13.5px; line-height:1.4; min-width:180px;}
   .lp b{display:block; font-size:14px; margin-bottom:2px;}
   .lp .cat{
@@ -191,19 +269,32 @@
   .me-dot{width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px rgba(37,99,235,0.5);}
 
   @media (max-width:560px){
-    #filters{max-width:130px; padding:8px; gap:4px;}
-    #filters button{padding:5px 7px; font-size:11.5px;}
-    #legend{max-width:150px; font-size:11px; padding:10px;}
+    #categoryPanel{max-width:150px; padding:8px;}
+    #categoryPanel button{padding:6px 7px; font-size:11.5px;}
     header{flex-wrap:wrap; gap:6px;}
     header .logo{font-size:12px; padding:6px 10px;}
     #weatherChip{font-size:11.5px; padding:6px 9px;}
     header .sos{padding:8px 12px; font-size:12px;}
     #routeToggle{top:60px; font-size:12.5px; padding:9px 14px;}
-    #routePanel{top:60px; width:calc(100vw - 28px);}
+
+    #routePanel{
+      position:fixed;
+      top:auto; left:0; right:0; bottom:0; width:100%; max-width:100%;
+      border-radius:20px 20px 0 0; max-height:78vh;
+      padding:10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+      transform:translateY(100%);
+      box-shadow:0 -10px 30px rgba(0,0,0,0.3);
+    }
+    #routePanel.open{transform:translateY(0);}
+    #routePanel .sheetHandle{
+      display:block; width:36px; height:4px; border-radius:999px; background:var(--border);
+      margin:2px auto 10px;
+    }
     #compassWrap{bottom:12px; left:10px;}
     #compass{width:52px;height:52px;}
     #compass .needle{height:19px; margin-top:-19px;}
     #locateBtn{width:34px;height:34px;font-size:14px;}
+    #sosMenu{right:14px;}
   }
 </style>
 </head>
@@ -214,45 +305,61 @@
   <header>
     <div class="logo"><span class="dot"></span> SafeWalk · Актобе</div>
     <div id="weatherChip"><span class="ic">…</span><span class="val">—</span></div>
-    <button class="sos" id="sosBtn">🆘 SOS</button>
+    <div class="sosWrap">
+      <button class="sos" id="sosBtn">🆘 SOS</button>
+      <div id="sosMenu">
+        <div class="hint">Экстренная помощь</div>
+        <a class="sosItem call" href="tel:112">📞 Позвонить 112</a>
+        <button class="sosItem" id="sosShareBtn">📍 Отправить моё местоположение</button>
+      </div>
+    </div>
   </header>
 
   <button id="routeToggle">🧭 Построить маршрут</button>
   <div id="routePanel">
+    <div class="sheetHandle"></div>
     <h3>Безопасный маршрут <button id="routeCloseBtn" title="Свернуть">✕</button></h3>
-    <div class="field">
+
+    <div class="modeSwitch" id="modeSwitch">
+      <button data-mode="foot" class="active"><span>🚶</span><span class="mlabel">Пешком</span></button>
+      <button data-mode="bike"><span>🚲</span><span class="mlabel">Вело</span></button>
+      <button data-mode="car"><span>🚗</span><span class="mlabel">Авто</span></button>
+    </div>
+
+    <div class="field" id="fromField">
       <input id="fromInput" type="text" placeholder="Откуда (например: ЦУМ)" autocomplete="off">
+      <button class="clearField" data-target="fromInput" title="Очистить">✕</button>
       <div class="suggest" id="fromSuggest" hidden></div>
     </div>
-    <div class="field">
+    <div class="field" id="toField">
       <input id="toInput" type="text" placeholder="Куда" autocomplete="off">
+      <button class="clearField" data-target="toInput" title="Очистить">✕</button>
       <div class="suggest" id="toSuggest" hidden></div>
     </div>
     <div class="row2">
       <button id="useMyLocBtn">📍 Моё место → «Откуда»</button>
       <button id="swapBtn" title="Поменять местами">⇅</button>
     </div>
+
+    <div class="favRow" id="favRow"></div>
+    <div class="recentWrap" id="recentWrap" hidden>
+      <div class="rtitle">Недавние маршруты</div>
+      <div class="recentRow" id="recentRow"></div>
+    </div>
+
     <button id="buildRouteBtn">Построить безопасный маршрут</button>
     <div id="routeStatus"></div>
     <button id="clearRouteBtn">Очистить маршрут</button>
   </div>
 
-  <div id="filters">
+  <div id="categoryPanel">
     <button data-cat="all" class="active">Все точки</button>
-    <button data-cat="light"><span class="sw" style="background:var(--light)"></span>Нет света</button>
-    <button data-cat="dogs"><span class="sw" style="background:var(--dogs)"></span>Собаки</button>
-    <button data-cat="construction"><span class="sw" style="background:var(--construction)"></span>Стройка</button>
-    <button data-cat="forest"><span class="sw" style="background:var(--forest)"></span>Лес/пустырь</button>
-    <button data-cat="other"><span class="sw" style="background:var(--other)"></span>Другое</button>
-  </div>
-
-  <div id="legend">
     <h4>Категории опасности</h4>
-    <div class="row"><span class="sw" style="background:var(--light)"></span>Нет освещения</div>
-    <div class="row"><span class="sw" style="background:var(--dogs)"></span>Бродячие собаки</div>
-    <div class="row"><span class="sw" style="background:var(--construction)"></span>Стройка</div>
-    <div class="row"><span class="sw" style="background:var(--forest)"></span>Лес / пустырь</div>
-    <div class="row"><span class="sw" style="background:var(--other)"></span>Другое (криминогенно)</div>
+    <button data-cat="light"><span class="sw" style="background:var(--light)"></span>Нет освещения<span class="cnt"></span></button>
+    <button data-cat="dogs"><span class="sw" style="background:var(--dogs)"></span>Бродячие собаки<span class="cnt"></span></button>
+    <button data-cat="construction"><span class="sw" style="background:var(--construction)"></span>Стройка<span class="cnt"></span></button>
+    <button data-cat="forest"><span class="sw" style="background:var(--forest)"></span>Лес / пустырь<span class="cnt"></span></button>
+    <button data-cat="other"><span class="sw" style="background:var(--other)"></span>Другое (криминогенно)<span class="cnt"></span></button>
   </div>
 
   <div id="compassWrap">
@@ -265,6 +372,8 @@
     </div>
     <button id="locateBtn" title="Определить моё местоположение">📍</button>
   </div>
+
+  <div id="toast"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -283,6 +392,13 @@ const CATEGORY_META = {
   forest:       { label: "Лес / пустырь",   color: "#16a34a", weight: 1 },
   other:        { label: "Другое",          color: "#6366f1", weight: 3 }
 };
+
+const MODE_META = {
+  foot: { profile:"foot", seg:"foot",     label:"пешком",       color:"#16a34a", safetyFirst:true  },
+  bike: { profile:"bike", seg:"bike",     label:"на велосипеде",color:"#0891b2", safetyFirst:true  },
+  car:  { profile:"car",  seg:"driving",  label:"на машине",    color:"#7c3aed", safetyFirst:false }
+};
+let currentMode = "foot";
 
 const points = [
   { name:"ул. Жыра (быв. Овражная)", cat:"light", lat:50.2789, lon:57.2368,
@@ -343,6 +459,16 @@ const points = [
 
 const AKTOBE_CENTER = [50.2837, 57.2298];
 
+// ---------- Toast ----------
+let toastTimer = null;
+function showToast(msg, ms){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2600);
+}
+
 // ---------- Map init ----------
 const map = L.map('map', { zoomControl: true }).setView(AKTOBE_CENTER, 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -388,11 +514,17 @@ fitToPoints();
 setTimeout(fitToPoints, 300);
 window.addEventListener('load', fitToPoints);
 
-document.querySelectorAll('#filters button').forEach(btn => {
+// ---------- Category panel (filter + legend merged) ----------
+document.querySelectorAll('#categoryPanel [data-cat]').forEach(btn => {
+  const cat = btn.dataset.cat;
+  if (cat !== 'all') {
+    const count = points.filter(p => p.cat === cat).length;
+    const cntEl = btn.querySelector('.cnt');
+    if (cntEl) cntEl.textContent = count;
+  }
   btn.addEventListener('click', () => {
-    document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#categoryPanel [data-cat]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const cat = btn.dataset.cat;
     markers.forEach(m => {
       const show = cat === 'all' || m.category === cat;
       if (show) { if (!map.hasLayer(m)) m.addTo(map); }
@@ -401,8 +533,36 @@ document.querySelectorAll('#filters button').forEach(btn => {
   });
 });
 
-document.getElementById('sosBtn').addEventListener('click', () => {
-  alert('В полной версии SafeWalk эта кнопка мгновенно отправит вашу геолокацию выбранным контактам и/или в экстренные службы. В MVP это заглушка для демонстрации.');
+// ---------- SOS ----------
+const sosBtn = document.getElementById('sosBtn');
+const sosMenu = document.getElementById('sosMenu');
+sosBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  sosMenu.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if (!sosMenu.contains(e.target) && e.target !== sosBtn) sosMenu.classList.remove('open');
+});
+document.getElementById('sosShareBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) { showToast('Геолокация не поддерживается браузером'); return; }
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+    sosMenu.classList.remove('open');
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Моё местоположение — SafeWalk', text: 'Я здесь:', url }); return; }
+      catch(e) { /* пользователь отменил или share недоступен — fallback ниже */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Ссылка на ваше местоположение скопирована — отправьте её тому, кому нужно');
+    } catch(e) {
+      showToast('Ваши координаты: ' + latitude.toFixed(5) + ', ' + longitude.toFixed(5));
+    }
+  }, () => {
+    sosMenu.classList.remove('open');
+    showToast('Не удалось определить местоположение');
+  }, { enableHighAccuracy:true, timeout:8000 });
 });
 
 // ---------- Weather ----------
@@ -532,9 +692,35 @@ document.getElementById('routeCloseBtn').addEventListener('click', () => {
   routeToggle.style.display = 'block';
 });
 
+// ---------- Mode switch ----------
+document.querySelectorAll('#modeSwitch button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#modeSwitch button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+  });
+});
+
+// ---------- Field clear buttons ----------
+function updateFieldState(input){
+  const wrap = input.closest('.field');
+  if (input.value.trim()) wrap.classList.add('hasVal'); else wrap.classList.remove('hasVal');
+}
+document.querySelectorAll('.clearField').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.target);
+    input.value = '';
+    delete input.dataset.lat; delete input.dataset.lon;
+    if (input.id === 'fromInput') fromCoord = null; else toCoord = null;
+    updateFieldState(input);
+    input.focus();
+  });
+});
+
 // ---------- Autocomplete (Nominatim) ----------
 const AKTOBE_VIEWBOX = '57.05,50.35,57.45,50.15'; // left,top,right,bottom
 let fromCoord = null, toCoord = null;
+let lastFocusedField = 'to';
 let debounceTimers = {};
 
 function debounceCall(key, fn, delay){
@@ -552,10 +738,14 @@ async function searchPlaces(query){
 function wireAutocomplete(inputId, suggestId, onPick){
   const input = document.getElementById(inputId);
   const suggest = document.getElementById(suggestId);
+  input.addEventListener('focus', () => { lastFocusedField = inputId === 'fromInput' ? 'from' : 'to'; });
   input.addEventListener('input', () => {
+    updateFieldState(input);
     const q = input.value.trim();
     if (input.dataset.lat) { delete input.dataset.lat; delete input.dataset.lon; }
     if (q.length < 3) { suggest.hidden = true; suggest.innerHTML=''; return; }
+    suggest.innerHTML = '<div><span class="spinner"></span>Идёт поиск…</div>';
+    suggest.hidden = false;
     debounceCall(inputId, async () => {
       try {
         const results = await searchPlaces(q);
@@ -568,6 +758,7 @@ function wireAutocomplete(inputId, suggestId, onPick){
             input.value = r.display_name.split(',').slice(0,3).join(',');
             input.dataset.lat = r.lat; input.dataset.lon = r.lon;
             suggest.hidden = true;
+            updateFieldState(input);
             onPick(parseFloat(r.lat), parseFloat(r.lon));
           });
           suggest.appendChild(div);
@@ -590,7 +781,9 @@ wireAutocomplete('toInput', 'toSuggest', (lat, lon) => { toCoord = L.latLng(lat,
 document.getElementById('useMyLocBtn').addEventListener('click', () => {
   locateMe((lat, lon) => {
     fromCoord = L.latLng(lat, lon);
-    document.getElementById('fromInput').value = 'Моё местоположение';
+    const fromInput = document.getElementById('fromInput');
+    fromInput.value = 'Моё местоположение';
+    updateFieldState(fromInput);
   });
 });
 
@@ -599,7 +792,115 @@ document.getElementById('swapBtn').addEventListener('click', () => {
   const toInput = document.getElementById('toInput');
   const tmpVal = fromInput.value; fromInput.value = toInput.value; toInput.value = tmpVal;
   const tmpCoord = fromCoord; fromCoord = toCoord; toCoord = tmpCoord;
+  updateFieldState(fromInput); updateFieldState(toInput);
 });
+
+// ---------- Favorites (localStorage) ----------
+const FAV_KEY = 'safewalk_favorites_v1';
+const FAV_SLOTS = [
+  { key:'home', icon:'🏠', label:'Дом' },
+  { key:'work', icon:'💼', label:'Работа' }
+];
+function loadFavorites(){
+  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || {}; } catch(e) { return {}; }
+}
+function saveFavorites(favs){
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); } catch(e) { /* хранилище недоступно — молча пропускаем */ }
+}
+function renderFavorites(){
+  const favs = loadFavorites();
+  const row = document.getElementById('favRow');
+  row.innerHTML = '';
+  FAV_SLOTS.forEach(slot => {
+    const saved = favs[slot.key];
+    const chip = document.createElement('button');
+    chip.className = 'favChip' + (saved ? ' saved' : '');
+    chip.type = 'button';
+    if (saved) {
+      chip.innerHTML = `<span>${slot.icon}</span><span class="lbl">${saved.label}</span><span class="rm" data-slot="${slot.key}">✕</span>`;
+    } else {
+      chip.innerHTML = `<span>${slot.icon}</span><span class="lbl">+ ${slot.label}</span>`;
+    }
+    chip.addEventListener('click', (e) => {
+      if (e.target.classList.contains('rm')) {
+        e.stopPropagation();
+        const f = loadFavorites();
+        delete f[slot.key];
+        saveFavorites(f);
+        renderFavorites();
+        showToast(`«${slot.label}» удалено из избранного`);
+        return;
+      }
+      const cur = loadFavorites()[slot.key];
+      if (cur) {
+        applyToField(lastFocusedField, cur.label, cur.lat, cur.lon);
+        showToast(`«${slot.label}» подставлено в поле «${lastFocusedField === 'from' ? 'Откуда' : 'Куда'}»`);
+      } else {
+        const coord = lastFocusedField === 'from' ? fromCoord : toCoord;
+        const inputEl = document.getElementById(lastFocusedField === 'from' ? 'fromInput' : 'toInput');
+        if (!coord || !inputEl.value.trim()) {
+          showToast('Сначала выберите адрес в поле «Откуда» или «Куда», затем нажмите сюда, чтобы сохранить его');
+          return;
+        }
+        const f = loadFavorites();
+        f[slot.key] = { label: inputEl.value.trim(), lat: coord.lat, lon: coord.lng };
+        saveFavorites(f);
+        renderFavorites();
+        showToast(`Сохранено как «${slot.label}»`);
+      }
+    });
+    row.appendChild(chip);
+  });
+}
+function applyToField(field, label, lat, lon){
+  const inputEl = document.getElementById(field === 'from' ? 'fromInput' : 'toInput');
+  inputEl.value = label;
+  updateFieldState(inputEl);
+  const ll = L.latLng(lat, lon);
+  if (field === 'from') fromCoord = ll; else toCoord = ll;
+}
+renderFavorites();
+
+// ---------- Recent routes (localStorage) ----------
+const RECENT_KEY = 'safewalk_recent_v1';
+function loadRecent(){
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch(e) { return []; }
+}
+function saveRecent(list){
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,4))); } catch(e) { /* молча пропускаем */ }
+}
+function pushRecent(entry){
+  let list = loadRecent();
+  list = list.filter(r => !(r.fromLabel === entry.fromLabel && r.toLabel === entry.toLabel && r.mode === entry.mode));
+  list.unshift(entry);
+  saveRecent(list);
+  renderRecent();
+}
+function renderRecent(){
+  const list = loadRecent();
+  const wrap = document.getElementById('recentWrap');
+  const row = document.getElementById('recentRow');
+  if (!list.length) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  row.innerHTML = '';
+  list.forEach(r => {
+    const chip = document.createElement('button');
+    chip.className = 'recentChip';
+    chip.type = 'button';
+    const modeIcon = MODE_META[r.mode] ? { foot:'🚶', bike:'🚲', car:'🚗' }[r.mode] : '🚶';
+    chip.textContent = `${modeIcon} ${shortLabel(r.fromLabel)} → ${shortLabel(r.toLabel)}`;
+    chip.addEventListener('click', () => {
+      applyToField('from', r.fromLabel, r.fromLat, r.fromLon);
+      applyToField('to', r.toLabel, r.toLat, r.toLon);
+      document.querySelectorAll('#modeSwitch button').forEach(b => b.classList.toggle('active', b.dataset.mode === r.mode));
+      currentMode = r.mode;
+      buildRoute();
+    });
+    row.appendChild(chip);
+  });
+}
+function shortLabel(s){ return s.length > 14 ? s.slice(0,13) + '…' : s; }
+renderRecent();
 
 // ---------- Routing + safety scoring ----------
 let routeLayers = [];
@@ -611,9 +912,6 @@ function clearRoute(){
 }
 document.getElementById('clearRouteBtn').addEventListener('click', clearRoute);
 
-function metersBetween(a, b){
-  return a.distanceTo(b);
-}
 // расстояние от точки до отрезка (в метрах), через локальную проекцию
 function pointToSegmentMeters(p, a, b){
   const refLat = (a.lat + b.lat) / 2 * Math.PI / 180;
@@ -647,8 +945,9 @@ function scoreRouteAgainstDangers(latlngs, thresholdM){
   return { score, near };
 }
 
-async function fetchRoutes(from, to){
-  const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&overview=full&alternatives=true`;
+async function fetchRoutes(from, to, mode){
+  const meta = MODE_META[mode];
+  const url = `https://routing.openstreetmap.de/routed-${meta.profile}/route/v1/${meta.seg}/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=geojson&overview=full&alternatives=true`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('routing service error');
   const data = await res.json();
@@ -660,9 +959,15 @@ async function fetchRoutes(from, to){
 }
 
 function fmtDist(m){ return m >= 1000 ? (m/1000).toFixed(1)+' км' : Math.round(m)+' м'; }
-function fmtDur(s){ const min = Math.round(s/60); return min < 1 ? '<1 мин' : min+' мин'; }
+function fmtDur(s){
+  const min = Math.round(s/60);
+  if (min < 1) return '<1 мин';
+  if (min < 60) return min+' мин';
+  const h = Math.floor(min/60), rem = min % 60;
+  return rem ? `${h} ч ${rem} мин` : `${h} ч`;
+}
 
-document.getElementById('buildRouteBtn').addEventListener('click', async () => {
+async function buildRoute(){
   const statusEl = document.getElementById('routeStatus');
   const btn = document.getElementById('buildRouteBtn');
   if (!fromCoord || !toCoord) {
@@ -671,52 +976,78 @@ document.getElementById('buildRouteBtn').addEventListener('click', async () => {
   }
   clearRoute();
   btn.disabled = true;
-  statusEl.innerHTML = 'Строим маршрут…';
+  const meta = MODE_META[currentMode];
+  statusEl.innerHTML = `Строим маршрут ${meta.label}…`;
   try {
-    const routes = await fetchRoutes(fromCoord, toCoord);
+    const routes = await fetchRoutes(fromCoord, toCoord, currentMode);
     const THRESHOLD = 120; // метров
     const scored = routes.map(r => Object.assign(r, scoreRouteAgainstDangers(r.latlngs, THRESHOLD)));
-    let safest = scored[0];
-    scored.forEach(r => { if (r.score < safest.score || (r.score === safest.score && r.distance < safest.distance)) safest = r; });
+
+    let chosen;
+    if (meta.safetyFirst) {
+      chosen = scored[0];
+      scored.forEach(r => { if (r.score < chosen.score || (r.score === chosen.score && r.distance < chosen.distance)) chosen = r; });
+    } else {
+      chosen = scored[0]; // для авто — самый быстрый / рекомендованный маршрут
+    }
     const fastest = scored[0];
 
     // рисуем альтернативные (серые) маршруты
     scored.forEach(r => {
-      if (r === safest) return;
+      if (r === chosen) return;
       const l = L.polyline(r.latlngs, { color:'#94a3b8', weight:4, opacity:0.6, dashArray:'6 8' }).addTo(map);
       routeLayers.push(l);
     });
-    // безопасный маршрут — поверх, зелёным
-    const safeLine = L.polyline(safest.latlngs, { color:'#16a34a', weight:5, opacity:0.9 }).addTo(map);
-    routeLayers.push(safeLine);
+    // выбранный маршрут — поверх, цветом по виду транспорта
+    const mainLine = L.polyline(chosen.latlngs, { color:meta.color, weight:5, opacity:0.9 }).addTo(map);
+    routeLayers.push(mainLine);
 
-    const startMarker = L.circleMarker(fromCoord, { radius:7, color:'#16a34a', fillColor:'#16a34a', fillOpacity:1 }).addTo(map);
+    const startMarker = L.circleMarker(fromCoord, { radius:7, color:meta.color, fillColor:meta.color, fillOpacity:1 }).addTo(map);
     const endMarker = L.circleMarker(toCoord, { radius:7, color:'#dc2626', fillColor:'#dc2626', fillOpacity:1 }).addTo(map);
     routeLayers.push(startMarker, endMarker);
 
-    map.fitBounds(safeLine.getBounds().pad(0.2));
+    map.fitBounds(mainLine.getBounds().pad(0.2));
 
-    const isDifferentFromFastest = safest !== fastest;
-    let html = `<span class="ok">✓ Маршрут построен</span><br>`;
-    html += `${fmtDist(safest.distance)} · ~${fmtDur(safest.duration)} пешком<br>`;
-    if (safest.near.length){
-      html += `<span class="warn">⚠ Рядом ${safest.near.length} опасных точек: ${safest.near.map(p=>p.name).join(', ')}</span><br>`;
+    let html = `<span class="ok">✓ Маршрут построен (${meta.label})</span><br>`;
+    html += `${fmtDist(chosen.distance)} · ~${fmtDur(chosen.duration)}<br>`;
+
+    if (meta.safetyFirst) {
+      if (chosen.near.length){
+        html += `<span class="warn">⚠ Рядом ${chosen.near.length} опасных точек: ${chosen.near.map(p=>p.name).join(', ')}</span><br>`;
+      } else {
+        html += `<span class="ok">Опасных точек рядом не найдено</span><br>`;
+      }
+      const isDifferentFromFastest = chosen !== fastest;
+      if (isDifferentFromFastest){
+        html += `<span style="color:#64748b">Показан не самый короткий, а самый безопасный из ${scored.length} найденных маршрутов (серым — остальные варианты).</span>`;
+      } else if (scored.length > 1) {
+        html += `<span style="color:#64748b">Самый быстрый маршрут оказался и самым безопасным из ${scored.length} вариантов.</span>`;
+      }
     } else {
-      html += `<span class="ok">Опасных точек рядом не найдено</span><br>`;
-    }
-    if (isDifferentFromFastest){
-      html += `<span style="color:#64748b">Показан не самый короткий, а самый безопасный из ${scored.length} найденных маршрутов (серым — остальные варианты).</span>`;
-    } else if (scored.length > 1) {
-      html += `<span style="color:#64748b">Самый быстрый маршрут оказался и самым безопасным из ${scored.length} вариантов.</span>`;
+      html += `<span style="color:#64748b">Показан оптимальный автомобильный маршрут.</span><br>`;
+      if (chosen.near.length){
+        html += `<span class="warn">ℹ Рядом с маршрутом ${chosen.near.length} опасных точек — актуально, если часть пути вы пройдёте пешком (например, от парковки): ${chosen.near.map(p=>p.name).join(', ')}</span>`;
+      }
     }
     statusEl.innerHTML = html;
     document.getElementById('clearRouteBtn').style.display = 'block';
+
+    pushRecent({
+      mode: currentMode,
+      fromLabel: document.getElementById('fromInput').value.trim() || 'Точка А',
+      fromLat: fromCoord.lat, fromLon: fromCoord.lng,
+      toLabel: document.getElementById('toInput').value.trim() || 'Точка Б',
+      toLat: toCoord.lat, toLon: toCoord.lng,
+      ts: Date.now()
+    });
   } catch(e) {
     statusEl.innerHTML = `<span class="err">Не удалось построить маршрут (сервис недоступен или нет соединения). Попробуйте ещё раз.</span>`;
   } finally {
     btn.disabled = false;
   }
-});
+}
+
+document.getElementById('buildRouteBtn').addEventListener('click', buildRoute);
 </script>
 </body>
 </html>
